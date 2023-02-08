@@ -12,7 +12,7 @@ class PID:
         self.kp = kp
         self.ki = ki
         self.kd = kd
-        self.loop_time = loop_time
+        self.loop_time = loop_time * 1e9  # ns
         self.integral_error = 0
         self.curr_time = 0
         self.prev_time = 0
@@ -25,17 +25,17 @@ class PID:
         # filter and velocity setup
         self.vel = 0
         self.raw_vel = 0
-        self.filter = ButterworthFilter(1000, 0.1)  # 1000 Hz at 0.1 Hz cutoff frequency 
+        self.filter = ButterworthFilter(100, 0.1)  # 100 Hz at 0.1 Hz cutoff frequency 
 
         # motor and encoder setup
         self.encoder = LS7366R(0, 1000000, 4)
-        self.sf = 1.  # encoder scale factor
+        self.sf = (1. / 7239) * 2.54  # encoder scale factor [cm]: (in / pulse) * (cm / in) 
         self.speed = 0
         self.mc = motoron.MotoronI2C()
         self.initMotor()
 
         # redis setup
-        self.redis_client = redis.Redis(host = host_name, port = port_id, db = 0, decode_responses = False)
+        self.redis_client = redis.Redis(host = host_name, port = port_id, db = 0, decode_responses = True)
         self.pos_str = pos_str
 
     def initMotor(self):
@@ -44,13 +44,15 @@ class PID:
         self.mc.clear_reset_flag()
 
     def startClock(self):
-        self.curr_time = time.time_ns()
+        # self.curr_time = time.time_ns()
+        self.curr_time = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
         self.prev_time = self.curr_time
 
     def computeSpeed(self):
-        self.curr_time = time.time_ns()
+        # self.curr_time = time.time_ns()
+        self.curr_time = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
         self.next_time = self.curr_time + self.loop_time
-        self.dt = (self.curr_time - self.prev_time) * 1e9
+        self.dt = (self.curr_time - self.prev_time) * 1e-9  # ns to s for velocity computation 
 
         # get current position from encoders
         self.getPosition()
@@ -80,9 +82,9 @@ class PID:
         self.integral_error += error * self.dt;  
     
     def waitUntilNextLoop(self):
-        self.remaining_dt = self.next_time - time.time_ns
+        self.remaining_dt = self.next_time - time.clock_gettime_ns(time.CLOCK_MONOTONIC)
         if self.remaining_dt > 0:
-            time.sleep(self.remaining_dt)  # > 3.11 precision is OK 
+            time.clock_nanosleep(self.remaining_dt)  # unix only 
 
     def getDesiredPosition(self):
         self.pos_des = float(self.redis_client.get(self.pos_str))
