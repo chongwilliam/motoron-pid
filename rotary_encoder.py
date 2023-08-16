@@ -2,9 +2,6 @@
 
 import pigpio
 
-FORWARD = 1
-REVERSE = -1
-
 class decoder:
 
    """Class to decode mechanical rotary encoder pulses."""
@@ -61,8 +58,8 @@ class decoder:
       self.pi.set_mode(gpioA, pigpio.INPUT)
       self.pi.set_mode(gpioB, pigpio.INPUT)
 
-      self.pi.set_pull_up_down(gpioA, pigpio.PUD_DOWN)
-      self.pi.set_pull_up_down(gpioB, pigpio.PUD_DOWN)
+      self.pi.set_pull_up_down(gpioA, pigpio.PUD_UP)
+      self.pi.set_pull_up_down(gpioB, pigpio.PUD_UP)
 
       self.cbA = self.pi.callback(gpioA, pigpio.EITHER_EDGE, self._pulse)
       self.cbB = self.pi.callback(gpioB, pigpio.EITHER_EDGE, self._pulse)
@@ -93,28 +90,12 @@ class decoder:
       if gpio != self.lastGpio: # debounce
          self.lastGpio = gpio
 
-         if gpio == self.gpioA:
-             if level == 1:
-                 if self.levB == 1:  # a: 0->1, b: 1->1  
-                     self.callback(REVERSE)
-                 else:  # a: 0->1, b: 0->0
-                     self.callback(FORWARD)  
-             else:
-                 if self.levB == 0:  # a: 1->0, b: 0->0
-                     self.callback(REVERSE)
-                 else:  # a: 1->0, b: 1->1
-                     self.callback(FORWARD)
-         else:
-             if level == 1:
-                 if self.levA == 1:  # b: 0->1, a: 1->1
-                     self.callback(FORWARD)
-                 else:  # b: 0->1, a: 0->0
-                     self.callback(REVERSE)
-             else:
-                 if self.levA == 0:  # b: 1->0, a: 0->0
-                     self.callback(FORWARD)
-                 else: # b: 1->0, a: 1->1
-                     self.callback(REVERSE)
+         if   gpio == self.gpioA and level == 1:
+            if self.levB == 1:
+               self.callback(1)
+         elif gpio == self.gpioB and level == 1:
+            if self.levA == 1:
+               self.callback(-1)
 
    def cancel(self):
 
@@ -144,7 +125,7 @@ if __name__ == "__main__":
 
    pi = pigpio.pi()
 
-   decoder = rotary_encoder.decoder(pi, 26, 19, callback)
+   decoder = rotary_encoder.decoder(pi, 20, 21, callback)
 
    time.sleep(300)
 
