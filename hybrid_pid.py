@@ -35,6 +35,8 @@ class PID:
         self.prev_pos = self.curr_pos
         self.pos_des = self.curr_pos
         self.vel_des = 0
+        self.error = 0
+        self.prev_error = 0
 
         # force pi setup
         self.kp_force = params['kp_force']
@@ -61,7 +63,8 @@ class PID:
         self.pi = pigpio.pi()
         self.enc_cnt = atomics.atomic(width=4, atype=atomics.INT)
         self.encoder = decoder(self.pi, params['enc_a'], params['enc_b'], self.callback)
-        self.sf = (1. / 7239) * 2.54  # encoder scale factor [cm]: (in / pulse) * (cm / in) 
+        # self.sf = (1. / 7239) * 2.54  # encoder scale factor [cm]: (in / pulse) * (cm / in) 
+        self.sf = params['enc_sf']
         self.speed = 0
         self.mc = motoron.MotoronI2C()
         self.initMotor()
@@ -81,6 +84,7 @@ class PID:
         self.max_vel = params['max_vel']
         self.vel_sat_mass = 10
         self.integral_sat = params['integral_sat']
+        self.integral_thresh = params['integral_thresh']  # if error is within this percentage, then start integral action
         self.nu = 0
         self.max_pos = params['max_pos']
         self.min_pos = params['min_pos']
@@ -147,7 +151,17 @@ class PID:
                     self.pos_des = self.max_pos
 
             # Update integral error
-            self.updatePositionIntegralError(self.curr_pos - self.pos_des)
+            self.error = self.curr_pos - self.pos_des
+            if (abs(self.error) < self.integral_thresh):
+                self.updatePositionIntegralError(self.error)
+            else:
+                self.integral_position_error = 0
+
+            # Integral zero crossing detection
+            if (self.sign(self.prev_error) is not self.sign(self.error)):
+                self.integral_position_error = 0
+
+            self.prev_error = self.error
 
             # Compute PID loop
             if self.vel_saturation_flag:
@@ -184,7 +198,12 @@ class PID:
             self.speed = 0
 
         # Set speed 
-        self.mc.set_speed_now(self.motor_id, int(self.speed))
+        if (self.pos_control_flag or self.force_control_flag):
+            if (abs(self.speed) > 400):
+                self.speed = self.sign(self.speed) * 400
+            elif (abs(self.speed) < 200):
+                self.speed = self.sign(self.speed) * 200
+            self.mc.set_speed_now(self.motor_id, int(self.speed))
 
         # Publish position information
         self.redis_client.set(self.pos_sense_key, str(self.curr_pos))
@@ -223,7 +242,12 @@ class PID:
         return self.filter.update(vel)
 
     def sign(self, x):
-        return (x > 0) - (x < 0)
+        if (x > 0):
+            return 1
+        elif (x < 0):
+            return -1
+        else:
+            return 0
 
     def sat(self, x):
         if abs(x) < 1:

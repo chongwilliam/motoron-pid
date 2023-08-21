@@ -23,13 +23,15 @@ if __name__ == '__main__':
    motor = PID(param_fname)
 
    cnt = 0
+   motor.startClock()
    while True:
        signal.signal(signal.SIGINT, signal_handler)
        motor.computeSpeed()
-       if cnt % 10 == 0:
+       if cnt % 100 == 0:
            print('Position: ' + str(motor.curr_pos))
            print('Force: ' + str(motor.curr_force))
            print('Speed: ' + str(motor.speed))
            # print('Velocity: ' + str(motor.curr_vel))
-           print('Loop dt: ' + str(motor.dt))   
+           # print('Loop dt: ' + str(motor.dt))   
+           # print('Integral position error: ' + str(motor.integral_position_error))
        cnt += 1
