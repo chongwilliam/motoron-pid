@@ -9,7 +9,7 @@ import pigpio
 import atomics
 import yaml
 
-motor_name = ['x,', 'y', 'z']
+motor_name = ['x', 'y', 'z']
 
 class PID:
     def __init__(self, param_fname):
@@ -203,7 +203,10 @@ class PID:
                 self.speed = self.sign(self.speed) * 400
             elif (abs(self.speed) < 200):
                 self.speed = self.sign(self.speed) * 200
-            self.mc.set_speed_now(self.motor_id, int(self.speed))
+            if self.motor_id == 0:
+                self.mc.set_speed_now(1, int(self.speed))
+            else:
+                self.mc.set_speed_now(self.motor_id, int(self.speed))
 
         # Publish position information
         self.redis_client.set(self.pos_sense_key, str(self.curr_pos))
